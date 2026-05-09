@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Price Alert</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f0f; color: #fff; min-height: 100vh; }
+  .header { background: #1a1a1a; padding: 16px 20px; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+  .prices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 16px; }
+  .price-card { background: #1a1a1a; border-radius: 12px; padding: 14px; border: 1px solid #2a2a2a; }
+  .price-card .label { font-size: 11px; color: #888; margin-bottom: 6px; }
+  .price-card .value { font-size: 18px; font-weight: 600; }
+  .price-card .change { font-size: 12px; margin-top: 4px; }
+  .up { color: #22c55e; }
+  .down { color: #ef4444; }
+  .section { padding: 0 16px 16px; }
+  .section h2 { font-size: 14px; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card { background: #1a1a1a; border-radius: 12px; padding: 16px; border: 1px solid #2a2a2a; margin-bottom: 12px; }
+  label { font-size: 13px; color: #aaa; display: block; margin-bottom: 6px; }
+  input { width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; margin-bottom: 12px; }
+  input:focus { border-color: #f59e0b; }
+  .alert-row { background: #222; border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid #2a2a2a; }
+  .alert-row select { width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; margin-bottom: 10px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-add { width: 100%; background: #2a2a2a; border: 1px dashed #3a3a3a; border-radius: 10px; padding: 12px; color: #aaa; font-size: 14px; cursor: pointer; margin-bottom: 12px; }
+  .btn-add:active { background: #333; }
+  .btn-save { width: 100%; background: #f59e0b; border: none; border-radius: 10px; padding: 14px; color: #000; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-save:active { background: #d97706; }
+  .btn-remove { background: none; border: none; color: #ef4444; font-size: 13px; cursor: pointer; margin-top: 8px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #000; padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; display: none; z-index: 999; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="dot"></div>
+  <h1>Price Alert Bot</h1>
+</div>
+
+<div class="prices" id="prices">
+  <div class="price-card"><div class="label">Loading...</div></div>
+</div>
+
+<div class="section">
+  <h2>ตั้งค่า Telegram</h2>
+  <div class="card">
+    <label>Bot Token</label>
+    <input type="text" id="token" placeholder="1234567890:AAF..." />
+    <label>Chat ID</label>
+    <input type="text" id="chat_id" placeholder="123456789" />
+  </div>
+</div>
+
+<div class="section">
+  <h2>ตั้งราคาแจ้งเตือน</h2>
+  <div id="alert-list"></div>
+  <button class="btn-add" onclick="addAlert()">+ เพิ่มการแจ้งเตือน</button>
+  <button class="btn-save" onclick="saveAlerts()">บันทึกและเริ่มแจ้งเตือน</button>
+</div>
+
+<div class="toast" id="toast">บันทึกแล้วค่ะ!</div>
+
+<script>
+const ASSETS = ["BTC/USDT","ETH/USDT","XRP/USDT","SOL/USDT","Gold","USD/THB"];
+let alertCount = 0;
+
+async function loadPrices() {
+  try {
+    const res = await fetch("/api/prices");
+    const data = await res.json();
+    const labels = {"BTC/USDT":"Bitcoin","ETH/USDT":"Ethereum","XRP/USDT":"XRP","SOL/USDT":"Solana","Gold":"Gold XAU","USD/THB":"USD/THB"};
+    document.getElementById("prices").innerHTML = Object.entries(data).map(([k,v]) => `
+      <div class="price-card">
+        <div class="label">${labels[k]||k}</div>
+        <div class="value">$${parseFloat(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      </div>`).join("");
+  } catch(e) {}
+}
+
+function addAlert() {
+  const id = alertCount++;
+  const div = document.createElement("div");
+  div.className = "alert-row";
+  div.id = `alert-${id}`;
+  div.innerHTML = `
+    <select id="asset-${id}">
+      ${ASSETS.map(a => `<option>${a}</option>`).join("")}
+    </select>
+    <div class="row2">
+      <div>
+        <label>ราคาขึ้นถึง (Above)</label>
+        <input type="number" id="above-${id}" placeholder="เช่น 90000" />
+      </div>
+      <div>
+        <label>ราคาลงถึง (Below)</label>
+        <input type="number" id="below-${id}" placeholder="เช่น 75000" />
+      </div>
+    </div>
+    <button class="btn-remove" onclick="document.getElementById('alert-${id}').remove()">ลบการแจ้งเตือนนี้</button>`;
+  document.getElementById("alert-list").appendChild(div);
+}
+
+async function saveAlerts() {
+  const token = document.getElementById("token").value.trim();
+  const chat_id = document.getElementById("chat_id").value.trim();
+  if (!token || !chat_id) { alert("กรุณากรอก Token และ Chat ID ก่อนนะคะ"); return; }
+  const alerts = [];
+  document.querySelectorAll(".alert-row").forEach((row, i) => {
+    const id = row.id.replace("alert-","");
+    const asset = document.getElementById(`asset-${id}`).value;
+    const above = document.getElementById(`above-${id}`).value;
+    const below = document.getElementById(`below-${id}`).value;
+    if (above || below) alerts.push({asset, above: above||null, below: below||null});
+  });
+  await fetch("/api/save", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({token, chat_id, alerts})});
+  const toast = document.getElementById("toast");
+  toast.style.display = "block";
+  setTimeout(() => toast.style.display = "none", 3000);
+}
+
+loadPrices();
+setInterval(loadPrices, 30000);
+addAlert();
+</script>
+</body>
+</html>
