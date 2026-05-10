@@ -90,8 +90,9 @@ def save_alerts():
         "Price Alert Bot พร้อมแจ้งเตือนแล้วค่ะ!")
     return jsonify({"status": "ok"})
 
+t = threading.Thread(target=monitor_loop, daemon=True)
+t.start()
+
 if __name__ == "__main__":
-    t = threading.Thread(target=monitor_loop, daemon=True)
-    t.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
