@@ -4,3 +4,4 @@ ccxt
 requests
 gunicorn
 gevent
+apscheduler
